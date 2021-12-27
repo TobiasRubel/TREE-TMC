@@ -1,2 +1,3 @@
 # Embedded-Quartet-Max-Cut
-g++ -std=c++11 -O2 -Iinclude -o tQMC tQMC.cpp bin/MQLib.a
+build: g++ -std=c++11 -O2 -Iinclude -o tQMC tQMC.cpp bin/MQLib.a
+usage: ./tQMC
