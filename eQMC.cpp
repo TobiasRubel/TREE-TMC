@@ -1153,40 +1153,40 @@ int main(int argc, char** argv) {
         if (item == "-h") {
             std::cout << "use '-h [option]' for more information" << std::endl;
             std::cout << "options: -h -i -o -v -x -w" << std::endl;
-            std::cout << "e.g., ./tQMC -h -i" << std::endl;
+            std::cout << "e.g., ./eQMC -h -i" << std::endl;
         }
         if (item == "-i") {
             std::cout << "use '-i [filename]' to assign input file" << std::endl;
-            std::cout << "e.g., ./tQMC -i input.tre -o output.tre" << std::endl;
+            std::cout << "e.g., ./eQMC -i input.tre -o output.tre" << std::endl;
         }
         if (item == "-o") {
             std::cout << "use '-o [filename]' to assign output file" << std::endl;
-            std::cout << "e.g., ./tQMC -i input.tre -o output.tre" << std::endl;
+            std::cout << "e.g., ./eQMC -i input.tre -o output.tre" << std::endl;
         }
         if (item == "-v") {
             std::cout << "use '-v [option]' to show intermediate results" << std::endl;
             std::cout << "options: 0 = none (default), 1 = subproblems, 2 = subproblems and subtrees, 3 = subproblems, subtrees and graphs" << std::endl;
-            std::cout << "e.g., ./tQMC -i input.tre -o output.tre -v 1" << std::endl;
+            std::cout << "e.g., ./eQMC -i input.tre -o output.tre -v 1" << std::endl;
         }
         if (item == "-x") {
             std::cout << "use '-x [option]' to set the execution mode" << std::endl;
             std::cout << "options: 0 = fast (default), 1 = naive, 2 = both and compare the results (test)" << std::endl;
-            std::cout << "e.g., ./tQMC -i input.tre -o output.tre -x 1" << std::endl;
+            std::cout << "e.g., ./eQMC -i input.tre -o output.tre -x 1" << std::endl;
         }
         if (item == "-w") {
             std::cout << "use '-w [option]' to set the weighting approach" << std::endl;
             std::cout << "options: 0 = normalization and weighting (default), 1 = only normalization, 2 = none" << std::endl;
-            std::cout << "e.g., ./tQMC -i input.tre -o output.tre -w 1" << std::endl;
+            std::cout << "e.g., ./eQMC -i input.tre -o output.tre -w 1" << std::endl;
         }
     }
     else {
         if (! fin.is_open()) {
             std::cout << "input file error" << std::endl;
-            std::cout << "try ./tQMC -h for help information" << std::endl;
+            std::cout << "try ./eQMC -h for help information" << std::endl;
         }
         else if (! fout.is_open()) {
             std::cout << "output file error" << std::endl;
-            std::cout << "try ./tQMC -h for help information" << std::endl;
+            std::cout << "try ./eQMC -h for help information" << std::endl;
         }
         else {
             stats[0] = stats[1] = stats[2] = 0;
