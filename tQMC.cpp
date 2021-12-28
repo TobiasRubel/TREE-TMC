@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdlib>
+#include <cassert>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -114,7 +115,7 @@ class Tree {
                 std::string label;
                 static double get_pairs(double *leaves, double s1, double s2, int x, int y);
         };
-        Tree(std::ifstream &fin, int execution, int weighting);
+        Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1);
         Tree(const std::string &newick);
         std::string to_string();
         ~Tree();
@@ -459,16 +460,18 @@ double Tree::Node::get_pairs(double *leaves, double s1, double s2, int x, int y)
     return (t1 * t1 - t2) / 2 + t1 * t0 + t0 * (t0 - 1) / 2;
 }
 
-Tree::Tree(std::ifstream &fin, int execution, int weighting) {
+Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     std::string newick;
     std::vector<Tree *> input;
     str<void>::set labels;
+    srand(s0);
     while (std::getline(fin, newick)) {
         Tree *t = new Tree(newick);
         input.push_back(t);
         t->append_labels(t->root, labels);
     }
     Taxa subset = Taxa(labels, weighting);
+    srand(s1);
     if (execution == 0) {
         root = construct_stree(input, subset);
     }
@@ -591,28 +594,30 @@ Tree::Node *Tree::build_tree(const std::string &newick) {
         return root;
     }
     else {
-        std::vector<int> k;
+        std::vector<Node *> subtrees;
+        int k = 1;
         for (int i = 0, j = 0; i < newick.length(); i ++) {
             if (newick.at(i) == '(') j ++;
             if (newick.at(i) == ')') j --;
-            if (newick.at(i) == ',' && j == 1) k.push_back(i);
+            if (newick.at(i) == ',' && j == 1) {
+                subtrees.push_back(build_tree(newick.substr(k, i - k)));
+                k = i + 1;
+            }
         }
-        int j = newick.length() - 1;
-        while (newick.at(j) != ')') j --;
-        Node *left, *right;
-        if (k.size() == 1) {
-            left = build_tree(newick.substr(1, k[0] - 1));
-            right = build_tree(newick.substr(k[0] + 1, j - k[0] - 1));
+        int i = newick.length() - 1;
+        while (newick.at(i) != ')') i --;
+        subtrees.push_back(build_tree(newick.substr(k, i - k)));
+        while (subtrees.size() > 1) {
+            int i = rand() % subtrees.size(), j = i; 
+            while (j == i) j = rand() % subtrees.size();
+            Node *root = new Node(Node::pseudonym());
+            root->left = subtrees[i]; root->right = subtrees[j];
+            root->left->parent = root->right->parent = root;
+            subtrees.erase(subtrees.begin() + i);
+            subtrees.erase(subtrees.begin() + (j > i ? j - 1 : j));
+            subtrees.push_back(root);
         }
-        else {
-            left = build_tree(newick.substr(1, k[0] - 1));
-            std::string right_newick = "(" + newick.substr(k[0] + 1, j - k[0] - 1) + ")";
-            right = build_tree(right_newick);
-        }
-        Node *root = new Node(Node::pseudonym());
-        root->left = left; root->right = right;
-        left->parent = right->parent = root;
-        return root;
+        return subtrees[0];
     }
 }
 
@@ -1186,7 +1191,7 @@ int main(int argc, char** argv) {
         else {
             stats[0] = stats[1] = stats[2] = 0;
             auto start = std::chrono::high_resolution_clock::now();
-            Tree *t = new Tree(fin, execution, weighting);
+            Tree *t = new Tree(fin, execution, weighting, 1, 1);
             fout << t->to_string() << ';' << std::endl;
             delete t;
             auto end = std::chrono::high_resolution_clock::now();
