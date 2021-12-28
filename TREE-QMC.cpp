@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cassert>
@@ -14,7 +15,7 @@
 
 std::string input_file = "", output_file = "";
 int verbose = 0, tid = 0;
-std::ofstream logs[4];
+std::ofstream logs[8];
 
 const std::string help = 
     "================== TREE-QMC =====================\n"
@@ -206,7 +207,7 @@ class Tree {
         Node *reroot(Node *root, str<void>::set &visited);
         Node *reroot_stree(Node *root, const std::string &pseudo);
         Node *pseudo2node(Node *root, const std::string &pseudo);
-        static std::string ordered(const std::string &a, const std::string &b);
+        static std::string ordered(const std::string &a, const std::string &b, const std::string &c);
 };
 
 /*
@@ -547,11 +548,19 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     else if (execution == 1) {
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
+        logs[4].open(input_file + ".weighted_quartets");
+        for (auto elem : quartets) 
+            logs[4] << elem.first << ":" << elem.second << std::endl;
+        logs[4].close();
         root = construct_stree_brute(quartets, subset, -1, 0);
     }
     else {
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
+        logs[4].open(input_file + ".weighted_quartets");
+        for (auto elem : quartets) 
+            logs[4] << elem.first << ":" << elem.second << std::endl;
+        logs[4].close();
         root = construct_stree_check(quartets, input, subset, -1, 0);
     }
     for (Tree *t : input) delete t;
@@ -1060,25 +1069,25 @@ Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tre
     return root;
 }
 
-std::string Tree::ordered(const std::string &a, const std::string &b) {
-    return a < b ? a + " " + b : b + " " + a;
+std::string Tree::ordered(const std::string &a, const std::string &b, const std::string &c) {
+    return a < b ? a + c + b : b + c + a;
 }
 
 std::string Tree::join(std::string *labels) {
-    return ordered(ordered(labels[0], labels[1]), ordered(labels[2], labels[3]));
+    return ordered(ordered(labels[0], labels[1], ","), ordered(labels[2], labels[3], ","), "|");
 }
 
 std::string *Tree::split(const std::string &qt) {
     std::string *labels = new std::string[4];
-    std::string delimiter = " ", s = qt;
-    for (int i = 0, j = 0; i < 4; i ++) {
+    std::string s = qt;
+    for (int i = 0; i < 4; i ++) {
         if (i == 3) {
             labels[i] = s;
         }
         else {
-            j = s.find(delimiter);
+            int j = std::min(s.find(","), s.find("|"));
             labels[i] = s.substr(0, j);
-            s.erase(0, j + delimiter.length());
+            s.erase(0, j + 1);
         }
     }
     return labels;
