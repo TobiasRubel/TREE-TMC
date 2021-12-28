@@ -12,6 +12,7 @@
 #include "problem/instance.h"
 #include "problem/max_cut_instance.h"
 
+std::string input_file = "", output_file = "";
 int verbose = 0, stats[16];
 std::ofstream logs[16];
 
@@ -98,7 +99,7 @@ class Matrix {
     public:
         template <typename T> static T ***new_mat(int size);
         template <typename T> static void delete_mat(T ***m, int size);
-        template <typename T> static void display_mat(T ***m, int size, int k);
+        template <typename T> static std::string display_mat(T ***m, int size, int k);
         template <typename T> static T diff_mat(T ***m1, T ***m2, int size, int k);
 };
 
@@ -199,9 +200,9 @@ class Tree {
         str<void>::set build_mat(Node *root, Taxa &subset, double ***mat);
         Node *build_tree(const std::string &newick);
         std::string display_tree(Node *root);
-        Node *construct_stree(std::vector<Tree *> &input, Taxa &subset);
-        Node *construct_stree_brute(str<double>::map &input, Taxa &subset);
-        Node *construct_stree_check(str<double>::map &input, std::vector<Tree *> &input_, Taxa &subset);
+        Node *construct_stree(std::vector<Tree *> &input, Taxa &subset, int pid, int depth);
+        Node *construct_stree_brute(str<double>::map &input, Taxa &subset, int pid, int depth);
+        Node *construct_stree_check(str<double>::map &input, std::vector<Tree *> &input_, Taxa &subset, int pid, int depth);
         Node *reroot(Node *root, str<void>::set &visited);
         Node *reroot_stree(Node *root, const std::string &pseudo);
         Node *pseudo2node(Node *root, const std::string &pseudo);
@@ -218,6 +219,7 @@ class Graph {
     public:
         Graph(std::vector<Tree*> &input, Taxa &subset);
         Graph(str<double>::map &input, Taxa &subset);
+        std::string display_graph();
         double distance(Graph *g, int k);
         double get_cut(str<void>::set *A, str<void>::set *B);
         ~Graph();
@@ -254,23 +256,25 @@ void Matrix::delete_mat(T ***m, int size) {
 }
 
 template <typename T>
-void Matrix::display_mat(T ***m, int size, int k) {
+std::string Matrix::display_mat(T ***m, int size, int k) {
+    std::stringstream ss;
     if (k != 0 && k != 1) {
         for (int i = 0; i < size; i ++) {
             for (int j = 0; j < size; j ++) {
-                std::cout << std::setw(8) << std::setprecision(6) << m[i][j][0] + m[i][j][1];
+                ss << std::setw(12) << std::setprecision(6) << m[i][j][0] + m[i][j][1];
             }
-            std::cout << std::endl;
+            ss << std::endl;
         }
     }
     else {
         for (int i = 0; i < size; i ++) {
             for (int j = 0; j < size; j ++) {
-                std::cout << std::setw(8) << std::setprecision(6) << m[i][j][k];
+                ss << std::setw(12) << std::setprecision(6) << m[i][j][k];
             }
-            std::cout << std::endl;
+            ss << std::endl;
         }
     }
+    return ss.str();
 }
 
 template <typename T>
@@ -537,17 +541,17 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     Taxa subset = Taxa(labels, weighting);
     srand(s1);
     if (execution == 0) {
-        root = construct_stree(input, subset);
+        root = construct_stree(input, subset, -1, 0);
     }
     else if (execution == 1) {
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
-        root = construct_stree_brute(quartets, subset);
+        root = construct_stree_brute(quartets, subset, -1, 0);
     }
     else {
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
-        root = construct_stree_check(quartets, input, subset);
+        root = construct_stree_check(quartets, input, subset, -1, 0);
     }
     for (Tree *t : input) delete t;
 }
@@ -862,7 +866,8 @@ Tree::Node *Tree::reroot_stree(Node *root, const std::string &pseudo) {
     return new_tree;
 }
 
-Tree::Node *Tree::construct_stree(std::vector<Tree *> &input, Taxa &subset) {
+Tree::Node *Tree::construct_stree(std::vector<Tree *> &input, Taxa &subset, int pid, int depth) {
+    int id = stats[0] ++;
     int size = subset.size();
     Node *root;
     if (size < 4) {
@@ -894,16 +899,24 @@ Tree::Node *Tree::construct_stree(std::vector<Tree *> &input, Taxa &subset) {
         Bm.update(As, pseudo);
         Am.update(Bs, pseudo);
         root = new Node(Node::pseudonym());
-        root->left = reroot_stree(construct_stree(input, Am), pseudo);
-        root->right = reroot_stree(construct_stree(input, Bm), pseudo);
+        root->left = reroot_stree(construct_stree(input, Am, id, depth + 1), pseudo);
+        root->right = reroot_stree(construct_stree(input, Bm, id, depth + 1), pseudo);
         root->left->parent = root->right->parent = root;
+        if (verbose >= 3) {
+            logs[3].open(input_file + "." + std::to_string(id) + ".mat");
+            logs[3] << g->display_graph();
+            logs[3].close();
+        }
         delete g;
     }
-    stats[0] += 1;
-    stats[1] += subset.single_size();
-    stats[2] += subset.multiple_size();
-    if (verbose >= 1) std::cout << subset.info() << std::endl;
-    if (verbose >= 2) std::cout << display_tree(root) << std::endl;
+    if (verbose >= 1) {
+        logs[1] << id << "," << pid << "," << depth << "," << subset.info() << std::endl;
+        if (verbose >= 2) {
+            logs[2].open(input_file + "." + std::to_string(id) + ".tre");
+            logs[2] << display_tree(root) << std::endl;
+            logs[2].close();
+        }
+    }
     return root;
 }
 
@@ -913,7 +926,8 @@ void Tree::append_quartet(str<double>::map &quartets, std::string quartet, doubl
     quartets[quartet] += weight;
 }
 
-Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset) {
+Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset, int pid, int depth) {
+    int id = stats[0] ++;
     int size = subset.size();
     Node *root;
     if (size < 4) {
@@ -956,20 +970,29 @@ Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset) {
             if (j > 2) append_quartet(Ai, quartet.first, quartet.second);
         }
         root = new Node(Node::pseudonym());
-        root->left = reroot_stree(construct_stree_brute(Ai, Am), pseudo);
-        root->right = reroot_stree(construct_stree_brute(Bi, Bm), pseudo);
+        root->left = reroot_stree(construct_stree_brute(Ai, Am, id, depth + 1), pseudo);
+        root->right = reroot_stree(construct_stree_brute(Bi, Bm, id, depth + 1), pseudo);
         root->left->parent = root->right->parent = root;
+        if (verbose >= 3) {
+            logs[3].open(input_file + "." + std::to_string(id) + ".mat");
+            logs[3] << g->display_graph();
+            logs[3].close();
+        }
         delete g;
     }
-    stats[0] += 1;
-    stats[1] += subset.single_size();
-    stats[2] += subset.multiple_size();
-    if (verbose >= 1) std::cout << subset.info() << std::endl;
-    if (verbose >= 2) std::cout << display_tree(root) << std::endl;
+    if (verbose >= 1) {
+        logs[1] << id << "," << pid << "," << depth << "," << subset.info() << std::endl;
+        if (verbose >= 2) {
+            logs[2].open(input_file + "." + std::to_string(id) + ".tre");
+            logs[2] << display_tree(root) << std::endl;
+            logs[2].close();
+        }
+    }
     return root;
 }
 
-Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tree *> &input_, Taxa &subset) {
+Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tree *> &input_, Taxa &subset, int pid, int depth) {
+    int id = stats[0] ++;
     int size = subset.size();
     Node *root;
     if (size < 4) {
@@ -1015,16 +1038,24 @@ Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tre
             if (j > 2) append_quartet(Ai, quartet.first, quartet.second);
         }
         root = new Node(Node::pseudonym());
-        root->left = reroot_stree(construct_stree_check(Ai, input_, Am), pseudo);
-        root->right = reroot_stree(construct_stree_check(Bi, input_, Bm), pseudo);
+        root->left = reroot_stree(construct_stree_check(Ai, input_, Am, id, depth + 1), pseudo);
+        root->right = reroot_stree(construct_stree_check(Bi, input_, Bm, id, depth + 1), pseudo);
         root->left->parent = root->right->parent = root;
+        if (verbose >= 3) {
+            logs[3].open(input_file + "." + std::to_string(id) + ".mat");
+            logs[3] << g->display_graph();
+            logs[3].close();
+        }
         delete g;
     }
-    stats[0] += 1;
-    stats[1] += subset.single_size();
-    stats[2] += subset.multiple_size();
-    if (verbose >= 1) std::cout << subset.info() << std::endl;
-    if (verbose >= 2) std::cout << display_tree(root) << std::endl;
+    if (verbose >= 1) {
+        logs[1] << id << "," << pid << "," << depth << "," << subset.info() << std::endl;
+        if (verbose >= 2) {
+            logs[2].open(input_file + "." + std::to_string(id) + ".tre");
+            logs[2] << display_tree(root) << std::endl;
+            logs[2].close();
+        }
+    }
     return root;
 }
 
@@ -1088,6 +1119,10 @@ void Tree::append_quartets(str<double>::map &quartets, Taxa &subset) {
     clear_states(root);
 }
 
+std::string Graph::display_graph() {
+    return Matrix::display_mat<double>(graph, size, 0);
+}
+
 Graph::Graph(std::vector<Tree*> &input, Taxa &subset) {
     size = subset.size();
     for (int i = 0; i < size; i ++) {
@@ -1106,7 +1141,6 @@ Graph::Graph(std::vector<Tree*> &input, Taxa &subset) {
         }
         Matrix::delete_mat<double>(mat, size);
     }
-    if (verbose >= 3) Matrix::display_mat<double>(graph, size, 0);
 }
 
 Graph::Graph(str<double>::map &input, Taxa &subset) {
@@ -1130,7 +1164,6 @@ Graph::Graph(str<double>::map &input, Taxa &subset) {
         graph[c][a][0] += w; graph[d][a][0] += w; graph[c][b][0] += w; graph[d][b][0] += w;
         delete [] labels;
     }
-    if (verbose >= 3) Matrix::display_mat<double>(graph, size, 0);
 }
 
 double Graph::distance(Graph *g, int k) {
@@ -1200,48 +1233,43 @@ double Graph::sdp_cut(double alpha, str<void>::set *A, str<void>::set *B) {
 }
 
 int main(int argc, char** argv) {
-    std::ifstream fin;
-    std::ofstream fout;
     int execution = 0, weighting = 0, polyseed = 1, cutseed = 1;
     for (int i = 0; i < argc; i ++) {
         std::string opt(argv[i]);
-        if (opt == "-h" || opt == "--help") {
-            std::cout << help;
-            return 0;
-        }
-        if (opt == "-i" || opt == "--input" && i < argc - 1) {
-            std::string file = argv[++ i];
-            fin.open(file);
-            logs[0].open(file + ".refined");
-        }
-        if (opt == "-o" || opt == "--output" && i < argc - 1) fout.open(argv[++ i]);
+        if (opt == "-h" || opt == "--help") { std::cout << help; return 0; }
+        if (opt == "-i" || opt == "--input" && i < argc - 1) input_file = argv[++ i];
+        if (opt == "-o" || opt == "--output" && i < argc - 1) output_file = argv[++ i];
         if (opt == "--polyseed" && i < argc - 1) polyseed = std::stoi(argv[++ i]);
         if (opt == "--maxcutseed" && i < argc - 1) cutseed = std::stoi(argv[++ i]);
         if ((opt == "-v" || opt == "--verbose") && i < argc - 1) verbose = std::stoi(argv[++ i]);
         if ((opt == "-n" || opt == "--naive") && i < argc - 1) execution = std::stoi(argv[++ i]);
         if ((opt == "-w" || opt == "--weighting") && i < argc - 1) weighting = std::stoi(argv[++ i]);
     }
+    std::ifstream fin(input_file);
+    std::ofstream fout(output_file);
     if (! fin.is_open()) {
         std::cout << "input file error" << std::endl;
-        return 0;
-    }
-    stats[0] = stats[1] = stats[2] = 0;
-    auto start = std::chrono::high_resolution_clock::now();
-    Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
-    fin.close();
-    if (! fout.is_open()) {
-        std::cout << t->to_string() << ';' << std::endl;
     }
     else {
-        fout << t->to_string() << ';' << std::endl;
-        fout.close();
+        logs[0].open(input_file + ".refined");
+        if (verbose >= 1) logs[1].open(input_file + ".log.csv");
+        auto start = std::chrono::high_resolution_clock::now();
+        Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
+        fin.close();
+        std::string result = t->to_string() + ";";
+        delete t;
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        if (! fout.is_open()) {
+            std::cout << result << std::endl;
+        }
+        else {
+            fout << result << std::endl;
+            fout.close();
+        }
+        logs[0].close();
+        if (logs[1].is_open()) logs[1].close();
+        std::cout << "execution time: " << duration.count() << "ms" << std::endl;
     }
-    delete t;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "execution time: " << duration.count() << "ms" << std::endl;
-    std::cout << "subproblems: " << stats[0] << std::endl;
-    std::cout << "input taxa: " << stats[1] << std::endl;
-    std::cout << "artificial taxa: " << stats[2] << std::endl;
     return 0;
 }
