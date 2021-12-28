@@ -13,7 +13,69 @@
 #include "problem/max_cut_instance.h"
 
 int verbose = 0, stats[16];
+std::ofstream logs[16];
 
+const std::string help = 
+    "================== TREE-QMC =====================\n"
+    "This is version 1.0.0 of TREe Embedded Quartet Max Cut (TREE-QMC).\n" 
+    "Usage: ./TREE-QMC [-h|--help] (-i|--input) <input file> [(-o|--output) <output file>]\n"
+    "[(--polyseed) <seed value>] [(--maxcutseed) <seed value>]\n"
+    "[(-w|--weighting) <weighting scheme>] [(-v|--verbose) <verbose mode>]\n"
+    "[(-n|--naive) <naive mode>]\n"
+    "[-h|--help]\n"
+    "        Prints this help message.\n"
+    "(-i|--input) <input file>\n"
+    "        Name of file containing input gene trees in newick format (required)\n"
+    "        IMPORTANT: the current implementation of TREE-QMC requires that the input gene\n"
+    "        trees are unrooted and binary. Thus, roots are suppressed and polytomies are randomly\n"
+    "        Refined during a preprocessing phase. The resulting trees are written to\n"
+    "        \"<input file>.refined\" for reference.\n"
+    "[(-o|--output) <output file>]\n"
+    "        Name of file for writing the output species tree (default: write to stdout)\n"
+    "[(--polyseed) <seed value>]\n"
+    "        Seeds the random number generator with <seed value> prior to arbitrarily resolving\n"
+    "        polytomies during the preprocessing phase. If <seed value> is set to -1, system time\n" 
+    "        is used; otherwise, <seed value> should be a positive integer (default: 12345).\n"
+    "[(--maxcutseed) <seed value>]\n"
+    "        Seeds the random number generator with <seed value> prior to calling the max cut\n"
+    "        heuristic but after the preprocessing phase. If <seed value> is set to -1, system time\n" 
+    "        is used; otherwise, <seed value> should be a positive integer (default: 678910).\n"
+    "[(-w|--weighting) <weighting scheme>]\n"
+    "        Initially, each quartet (e.g. \"A,B|C,D\") is weighted by the number of input gene trees\n" 
+    "        that induce it, so each gene tree contributes exactly one quartet on each subset of\n"
+    "        4 taxa (assuming no missing taxa). When artificial taxa are introduced during the\n"
+    "        recursive steps, which results in multiple leaves being assigned the same taxon label.\n" 
+    "        The result is that a single gene tree can contribute multiple quartets on the same set\n"
+    "        of four taxa, each with a different frequency.\n"
+    "        -w 0: use quartet frequencies (same as in original wQMC algorithm)\n"
+    "            Example: Gene tree ((((((A,A),B),C),A),D),E) would contribute quartet A,B|C,D\n"
+    "            with weight 2, quartet B,C|A,D with weight 1, and quartet A,C|B,D with weight 0.\n"
+    "        -w 1: use normalized quartet frequencies\n"
+    "            Example: Gene tree ((((((A,A),B),C),A),D),E) would contribute quartet A,B|C,D\n"
+    "            with weight 2/3, quartet B,C|A,D with weight 1/3, and quartet A,C|B,D with\n"
+    "            weight 0.\n"
+    "        -w 2: use improved weighting scheme described in TREE-QMC paper (default)\n"
+    "            Note: Like weighting scheme 1, weights for quartets on the same subset of 4 taxa\n"
+    "            are set so that they sum to 1 for each gene tree.\n"
+    "[(-v|--verbose) <verbose mode>]\n"
+    "        -v 0: outputs no subproblem information (default)\n"
+    "        -v 1: outputs CSV with subproblem information (e.g. subproblem ID, parent problem ID,\n"
+    "            depth of recursion, # of taxa in subproblem, # of artificial taxa in the \n"
+    "            subproblem,  etc.)\n"
+    "        -v 2: additionally outputs subproblem trees in newick format\n"
+    "        -v 3: additionally outputs subproblem quartet graphs in phylip matrix format\n"
+    "[(-n|--naive) <naive mode>]\n"
+    "        TREE-QMC uses an efficient algorithm that operates directly on the input gene trees by\n"
+    "        default. The naive algorithm, which operates on a set of weighted quartets extracted\n"
+    "        from the input gene trees, is also implemented for testing purposes.\n"
+    "        -n 0: run naive algorithm instead of efficient algorithm (requires -w 0 or -w 2)\n"
+    "        -n 1: write weighted quartets so that they given as input to wQMC (see\n"
+    "            \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\")\n"
+    "        -n 2: verify that the naive and efficient algorithms produce equivalent quartet\n"
+    "            graphs for all sub-problems (requires -w 0 or -w 2)\n"
+    "Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n"
+    "If you use TREE-QMC in your work, please cite:\n"
+    "Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species tree estimation from gene trees\", Github Repository, <link>.";
 /*
     succinct names for unordered map and set of strings
     str<int>::map <=> std::unordered_map<std::string, int>
@@ -467,9 +529,11 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     srand(s0);
     while (std::getline(fin, newick)) {
         Tree *t = new Tree(newick);
+        logs[0] << t->to_string() << ";" << std::endl;
         input.push_back(t);
         t->append_labels(t->root, labels);
     }
+    logs[0].close();
     Taxa subset = Taxa(labels, weighting);
     srand(s1);
     if (execution == 0) {
@@ -799,11 +863,7 @@ Tree::Node *Tree::reroot_stree(Node *root, const std::string &pseudo) {
 }
 
 Tree::Node *Tree::construct_stree(std::vector<Tree *> &input, Taxa &subset) {
-    stats[0] += 1;
-    stats[1] += subset.single_size();
-    stats[2] += subset.multiple_size();
     int size = subset.size();
-    if (verbose >= 1) std::cout << subset.info() << std::endl;
     Node *root;
     if (size < 4) {
         if (size == 1) {
@@ -839,6 +899,10 @@ Tree::Node *Tree::construct_stree(std::vector<Tree *> &input, Taxa &subset) {
         root->left->parent = root->right->parent = root;
         delete g;
     }
+    stats[0] += 1;
+    stats[1] += subset.single_size();
+    stats[2] += subset.multiple_size();
+    if (verbose >= 1) std::cout << subset.info() << std::endl;
     if (verbose >= 2) std::cout << display_tree(root) << std::endl;
     return root;
 }
@@ -850,11 +914,7 @@ void Tree::append_quartet(str<double>::map &quartets, std::string quartet, doubl
 }
 
 Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset) {
-    stats[0] += 1;
-    stats[1] += subset.single_size();
-    stats[2] += subset.multiple_size();
     int size = subset.size();
-    if (verbose >= 1) std::cout << subset.info() << std::endl;
     Node *root;
     if (size < 4) {
         if (size == 1) {
@@ -901,16 +961,16 @@ Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset) {
         root->left->parent = root->right->parent = root;
         delete g;
     }
+    stats[0] += 1;
+    stats[1] += subset.single_size();
+    stats[2] += subset.multiple_size();
+    if (verbose >= 1) std::cout << subset.info() << std::endl;
     if (verbose >= 2) std::cout << display_tree(root) << std::endl;
     return root;
 }
 
 Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tree *> &input_, Taxa &subset) {
-    stats[0] += 1;
-    stats[1] += subset.single_size();
-    stats[2] += subset.multiple_size();
     int size = subset.size();
-    if (verbose >= 1) std::cout << subset.info() << std::endl;
     Node *root;
     if (size < 4) {
         if (size == 1) {
@@ -960,6 +1020,10 @@ Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tre
         root->left->parent = root->right->parent = root;
         delete g;
     }
+    stats[0] += 1;
+    stats[1] += subset.single_size();
+    stats[2] += subset.multiple_size();
+    if (verbose >= 1) std::cout << subset.info() << std::endl;
     if (verbose >= 2) std::cout << display_tree(root) << std::endl;
     return root;
 }
@@ -1138,69 +1202,46 @@ double Graph::sdp_cut(double alpha, str<void>::set *A, str<void>::set *B) {
 int main(int argc, char** argv) {
     std::ifstream fin;
     std::ofstream fout;
-    std::string item;
-    int execution = 0, weighting = 0;
+    int execution = 0, weighting = 0, polyseed = 1, cutseed = 1;
     for (int i = 0; i < argc; i ++) {
         std::string opt(argv[i]);
-        if (opt == "-h") item = i == argc - 1 ? "-h" : argv[++ i];
-        if (opt == "-i" && i < argc - 1) fin.open(argv[++ i]);
-        if (opt == "-o" && i < argc - 1) fout.open(argv[++ i]);
-        if (opt == "-v" && i < argc - 1) verbose = std::stoi(argv[++ i]);
-        if (opt == "-x" && i < argc - 1) execution = std::stoi(argv[++ i]);
-        if (opt == "-w" && i < argc - 1) weighting = std::stoi(argv[++ i]);
+        if (opt == "-h" || opt == "--help") {
+            std::cout << help;
+            return 0;
+        }
+        if (opt == "-i" || opt == "--input" && i < argc - 1) {
+            std::string file = argv[++ i];
+            fin.open(file);
+            logs[0].open(file + ".refined");
+        }
+        if (opt == "-o" || opt == "--output" && i < argc - 1) fout.open(argv[++ i]);
+        if (opt == "--polyseed" && i < argc - 1) polyseed = std::stoi(argv[++ i]);
+        if (opt == "--maxcutseed" && i < argc - 1) cutseed = std::stoi(argv[++ i]);
+        if ((opt == "-v" || opt == "--verbose") && i < argc - 1) verbose = std::stoi(argv[++ i]);
+        if ((opt == "-n" || opt == "--naive") && i < argc - 1) execution = std::stoi(argv[++ i]);
+        if ((opt == "-w" || opt == "--weighting") && i < argc - 1) weighting = std::stoi(argv[++ i]);
     }
-    if (item != "") {
-        if (item == "-h") {
-            std::cout << "use '-h [option]' for more information" << std::endl;
-            std::cout << "options: -h -i -o -v -x -w" << std::endl;
-            std::cout << "e.g., ./eQMC -h -i" << std::endl;
-        }
-        if (item == "-i") {
-            std::cout << "use '-i [filename]' to assign input file" << std::endl;
-            std::cout << "e.g., ./eQMC -i input.tre -o output.tre" << std::endl;
-        }
-        if (item == "-o") {
-            std::cout << "use '-o [filename]' to assign output file" << std::endl;
-            std::cout << "e.g., ./eQMC -i input.tre -o output.tre" << std::endl;
-        }
-        if (item == "-v") {
-            std::cout << "use '-v [option]' to show intermediate results" << std::endl;
-            std::cout << "options: 0 = none (default), 1 = subproblems, 2 = subproblems and subtrees, 3 = subproblems, subtrees and graphs" << std::endl;
-            std::cout << "e.g., ./eQMC -i input.tre -o output.tre -v 1" << std::endl;
-        }
-        if (item == "-x") {
-            std::cout << "use '-x [option]' to set the execution mode" << std::endl;
-            std::cout << "options: 0 = fast (default), 1 = naive, 2 = both and compare the results (test)" << std::endl;
-            std::cout << "e.g., ./eQMC -i input.tre -o output.tre -x 1" << std::endl;
-        }
-        if (item == "-w") {
-            std::cout << "use '-w [option]' to set the weighting approach" << std::endl;
-            std::cout << "options: 0 = normalization and weighting (default), 1 = only normalization, 2 = none" << std::endl;
-            std::cout << "e.g., ./eQMC -i input.tre -o output.tre -w 1" << std::endl;
-        }
+    if (! fin.is_open()) {
+        std::cout << "input file error" << std::endl;
+        return 0;
+    }
+    stats[0] = stats[1] = stats[2] = 0;
+    auto start = std::chrono::high_resolution_clock::now();
+    Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
+    fin.close();
+    if (! fout.is_open()) {
+        std::cout << t->to_string() << ';' << std::endl;
     }
     else {
-        if (! fin.is_open()) {
-            std::cout << "input file error" << std::endl;
-            std::cout << "try ./eQMC -h for help information" << std::endl;
-        }
-        else if (! fout.is_open()) {
-            std::cout << "output file error" << std::endl;
-            std::cout << "try ./eQMC -h for help information" << std::endl;
-        }
-        else {
-            stats[0] = stats[1] = stats[2] = 0;
-            auto start = std::chrono::high_resolution_clock::now();
-            Tree *t = new Tree(fin, execution, weighting, 1, 1);
-            fout << t->to_string() << ';' << std::endl;
-            delete t;
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "execution time: " << duration.count() << "ms" << std::endl;
-            std::cout << "subproblems: " << stats[0] << std::endl;
-            std::cout << "input taxa: " << stats[1] << std::endl;
-            std::cout << "artificial taxa: " << stats[2] << std::endl;
-        }
+        fout << t->to_string() << ';' << std::endl;
+        fout.close();
     }
+    delete t;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "execution time: " << duration.count() << "ms" << std::endl;
+    std::cout << "subproblems: " << stats[0] << std::endl;
+    std::cout << "input taxa: " << stats[1] << std::endl;
+    std::cout << "artificial taxa: " << stats[2] << std::endl;
     return 0;
 }
