@@ -533,6 +533,7 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     str<void>::set labels;
     if (s0 < 0) srand(time(0)); else srand(s0);
     while (std::getline(fin, newick)) {
+        if (newick.find(";") == std::string::npos) break;
         Tree *t = new Tree(newick);
         logs[0] << t->to_string() << ";" << std::endl;
         input.push_back(t);
