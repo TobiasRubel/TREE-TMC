@@ -13,8 +13,8 @@
 #include "problem/max_cut_instance.h"
 
 std::string input_file = "", output_file = "";
-int verbose = 0, stats[16];
-std::ofstream logs[16];
+int verbose = 0, tid = 0;
+std::ofstream logs[4];
 
 const std::string help = 
     "================== TREE-QMC =====================\n"
@@ -530,7 +530,7 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     std::string newick;
     std::vector<Tree *> input;
     str<void>::set labels;
-    srand(s0);
+    if (s0 < 0) srand(time(0)); else srand(s0);
     while (std::getline(fin, newick)) {
         Tree *t = new Tree(newick);
         logs[0] << t->to_string() << ";" << std::endl;
@@ -538,8 +538,9 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
         t->append_labels(t->root, labels);
     }
     logs[0].close();
+    tid = 0;
     Taxa subset = Taxa(labels, weighting);
-    srand(s1);
+    if (s1 < 0) srand(time(0)); else srand(s1);
     if (execution == 0) {
         root = construct_stree(input, subset, -1, 0);
     }
@@ -867,7 +868,7 @@ Tree::Node *Tree::reroot_stree(Node *root, const std::string &pseudo) {
 }
 
 Tree::Node *Tree::construct_stree(std::vector<Tree *> &input, Taxa &subset, int pid, int depth) {
-    int id = stats[0] ++;
+    int id = tid ++;
     int size = subset.size();
     Node *root;
     if (size < 4) {
@@ -927,7 +928,7 @@ void Tree::append_quartet(str<double>::map &quartets, std::string quartet, doubl
 }
 
 Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset, int pid, int depth) {
-    int id = stats[0] ++;
+    int id = tid ++;
     int size = subset.size();
     Node *root;
     if (size < 4) {
@@ -992,7 +993,7 @@ Tree::Node *Tree::construct_stree_brute(str<double>::map &input, Taxa &subset, i
 }
 
 Tree::Node *Tree::construct_stree_check(str<double>::map &input, std::vector<Tree *> &input_, Taxa &subset, int pid, int depth) {
-    int id = stats[0] ++;
+    int id = tid ++;
     int size = subset.size();
     Node *root;
     if (size < 4) {
@@ -1239,37 +1240,36 @@ int main(int argc, char** argv) {
         if (opt == "-h" || opt == "--help") { std::cout << help; return 0; }
         if (opt == "-i" || opt == "--input" && i < argc - 1) input_file = argv[++ i];
         if (opt == "-o" || opt == "--output" && i < argc - 1) output_file = argv[++ i];
-        if (opt == "--polyseed" && i < argc - 1) polyseed = std::stoi(argv[++ i]);
-        if (opt == "--maxcutseed" && i < argc - 1) cutseed = std::stoi(argv[++ i]);
         if ((opt == "-v" || opt == "--verbose") && i < argc - 1) verbose = std::stoi(argv[++ i]);
         if ((opt == "-n" || opt == "--naive") && i < argc - 1) execution = std::stoi(argv[++ i]);
         if ((opt == "-w" || opt == "--weighting") && i < argc - 1) weighting = std::stoi(argv[++ i]);
+        if (opt == "--polyseed" && i < argc - 1) polyseed = std::stoi(argv[++ i]);
+        if (opt == "--maxcutseed" && i < argc - 1) cutseed = std::stoi(argv[++ i]);
     }
     std::ifstream fin(input_file);
-    std::ofstream fout(output_file);
     if (! fin.is_open()) {
         std::cout << "input file error" << std::endl;
+        return 0;
+    }
+    logs[0].open(input_file + ".refined");
+    if (verbose >= 1) logs[1].open(input_file + ".csv");
+    auto start = std::chrono::high_resolution_clock::now();
+    Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
+    fin.close();
+    std::string result = t->to_string() + ";";
+    delete t;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::ofstream fout(output_file);
+    if (! fout.is_open()) {
+        std::cout << result << std::endl;
     }
     else {
-        logs[0].open(input_file + ".refined");
-        if (verbose >= 1) logs[1].open(input_file + ".log.csv");
-        auto start = std::chrono::high_resolution_clock::now();
-        Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
-        fin.close();
-        std::string result = t->to_string() + ";";
-        delete t;
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        if (! fout.is_open()) {
-            std::cout << result << std::endl;
-        }
-        else {
-            fout << result << std::endl;
-            fout.close();
-        }
-        logs[0].close();
-        if (logs[1].is_open()) logs[1].close();
-        std::cout << "execution time: " << duration.count() << "ms" << std::endl;
+        fout << result << std::endl;
+        fout.close();
     }
+    logs[0].close();
+    if (verbose >= 1) logs[1].close();
+    std::cout << "execution time: " << duration.count() << "ms" << std::endl;
     return 0;
 }
