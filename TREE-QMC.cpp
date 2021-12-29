@@ -70,11 +70,11 @@ const std::string help =
     "        TREE-QMC uses an efficient algorithm that operates directly on the input gene trees by\n"
     "        default. The naive algorithm, which operates on a set of weighted quartets extracted\n"
     "        from the input gene trees, is also implemented for testing purposes.\n"
-    "        -n 0: run naive algorithm instead of efficient algorithm (requires -w 0 or -w 2)\n"
+    "        -n 0: run naive algorithm instead of efficient algorithm\n"
     "        -n 1: write weighted quartets so that they given as input to wQMC (see\n"
     "            \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\")\n"
     "        -n 2: verify that the naive and efficient algorithms produce equivalent quartet\n"
-    "            graphs for all sub-problems (requires -w 0 or -w 2)\n"
+    "            graphs for all sub-problems\n"
     "Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n"
     "If you use TREE-QMC in your work, please cite:\n"
     "Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species tree estimation from gene trees\", Github Repository, <link>.";
@@ -1263,7 +1263,10 @@ int main(int argc, char** argv) {
         return 0;
     }
     logs[0].open(input_file + ".refined");
-    if (verbose >= 1) logs[1].open(input_file + ".csv");
+    if (verbose >= 1) {
+        logs[1].open(input_file + ".csv");
+        logs[1] << 
+    }
     auto start = std::chrono::high_resolution_clock::now();
     Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
     fin.close();
