@@ -78,6 +78,7 @@ const std::string help =
     "Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n"
     "If you use TREE-QMC in your work, please cite:\n"
     "Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species tree estimation from gene trees\", Github Repository, <link>.";
+
 /*
     succinct names for unordered map and set of strings
     str<int>::map <=> std::unordered_map<std::string, int>
