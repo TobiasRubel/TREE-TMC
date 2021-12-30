@@ -209,6 +209,7 @@ class Tree {
         Node *reroot_stree(Node *root, const std::string &pseudo);
         Node *pseudo2node(Node *root, const std::string &pseudo);
         static std::string ordered(const std::string &a, const std::string &b, const std::string &c);
+        void output_quartets(str<double>::map &quartets, Taxa &subset);
 };
 
 /*
@@ -528,6 +529,22 @@ double Tree::Node::get_pairs(double *leaves, double s1, double s2, int x, int y)
     return (t1 * t1 - t2) / 2 + t1 * t0 + t0 * (t0 - 1) / 2;
 }
 
+void Tree::output_quartets(str<double>::map &quartets, Taxa &subset) {
+    logs[4].open(input_file + ".weighted_quartets");
+    for (auto elem : quartets) {
+        std::string *labels = split(elem.first);
+        for (int i = 0; i < 4; i ++) 
+            labels[i] = std::to_string(subset.label2index(labels[i]));
+        logs[4] << join(labels) << ":" << elem.second << std::endl;
+        delete [] labels;
+    }
+    logs[4].close();
+    logs[4].open(input_file + ".taxon_name_map");
+    for (int i = 0; i < subset.single_size(); i ++) 
+        logs[4] << subset.index2label(i) << ":" << i << std::endl;
+    logs[4].close();
+}
+
 Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     std::string newick;
     std::vector<Tree *> input;
@@ -550,19 +567,13 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
     else if (execution == 1) {
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
-        logs[4].open(input_file + ".weighted_quartets");
-        for (auto elem : quartets) 
-            logs[4] << elem.first << ":" << elem.second << std::endl;
-        logs[4].close();
+        output_quartets(quartets, subset);
         root = construct_stree_brute(quartets, subset, -1, 0);
     }
     else {
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
-        logs[4].open(input_file + ".weighted_quartets");
-        for (auto elem : quartets) 
-            logs[4] << elem.first << ":" << elem.second << std::endl;
-        logs[4].close();
+        output_quartets(quartets, subset);
         root = construct_stree_check(quartets, input, subset, -1, 0);
     }
     for (Tree *t : input) delete t;
@@ -1132,7 +1143,23 @@ void Tree::append_quartets(str<double>::map &quartets, Taxa &subset) {
 }
 
 std::string Graph::display_graph() {
-    return Matrix::display_mat<double>(graph, size, 0);
+    std::stringstream ss;
+    ss << size << std::endl;
+    for (int k = 0; k < 2; k ++) {
+        ss << std::setw(12) << " ";
+        for (int i = 0; i < size; i ++) 
+            ss << std::setw(12) << labels[i];
+        ss << std::endl;
+        for (int i = 0; i < size; i ++) {
+            ss << std::setw(12) << labels[i];
+            for (int j = 0; j < size; j ++) {
+                ss << std::setw(12) << std::setprecision(6) << graph[i][j][k];
+            }
+            ss << std::endl;
+        }
+        ss << std::endl;
+    }
+    return ss.str();
 }
 
 Graph::Graph(std::vector<Tree*> &input, Taxa &subset) {
@@ -1265,7 +1292,7 @@ int main(int argc, char** argv) {
     logs[0].open(input_file + ".refined");
     if (verbose >= 1) {
         logs[1].open(input_file + ".csv");
-        logs[1] << 
+        logs[1] << "id,pid,depth,a,b" << std::endl;
     }
     auto start = std::chrono::high_resolution_clock::now();
     Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
