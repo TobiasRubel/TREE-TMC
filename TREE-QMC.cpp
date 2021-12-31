@@ -42,23 +42,15 @@ const std::string help =
     "        Seeds the random number generator with <seed value> prior to calling the max cut\n"
     "        heuristic but after the preprocessing phase. If <seed value> is set to -1, system time\n" 
     "        is used; otherwise, <seed value> should be a positive integer (default: 678910).\n"
-    "[(-w|--weighting) <weighting scheme>]\n"
-    "        Initially, each quartet (e.g. \"A,B|C,D\") is weighted by the number of input gene trees\n" 
-    "        that induce it, so each gene tree contributes exactly one quartet on each subset of\n"
-    "        4 taxa (assuming no missing taxa). When artificial taxa are introduced during the\n"
-    "        recursive steps, which results in multiple leaves being assigned the same taxon label.\n" 
-    "        The result is that a single gene tree can contribute multiple quartets on the same set\n"
-    "        of four taxa, each with a different frequency.\n"
-    "        -w 0: use quartet frequencies (same as in original wQMC algorithm)\n"
-    "            Example: Gene tree ((((((A,A),B),C),A),D),E) would contribute quartet A,B|C,D\n"
-    "            with weight 2, quartet B,C|A,D with weight 1, and quartet A,C|B,D with weight 0.\n"
-    "        -w 1: use normalized quartet frequencies\n"
-    "            Example: Gene tree ((((((A,A),B),C),A),D),E) would contribute quartet A,B|C,D\n"
-    "            with weight 2/3, quartet B,C|A,D with weight 1/3, and quartet A,C|B,D with\n"
-    "            weight 0.\n"
-    "        -w 2: use improved weighting scheme described in TREE-QMC paper (default)\n"
-    "            Note: Like weighting scheme 1, weights for quartets on the same subset of 4 taxa\n"
-    "            are set so that they sum to 1 for each gene tree.\n"
+    "[(-n|--normalize) <normalization scheme for artificial taxa>]\n"
+    "        Initially, each quartet (e.g. \"A,B|C,D\") is weighted by the number of input gene trees\n"
+    "        that induce it. At each step in the divide phase of the wQMC and TREE-QMC algorithms, \n"
+    "        the input is modified with an artificial taxon. We propose two normalization schemes \n"
+    "        for artificial taxa and find that they improve empirical performance of TREE-QMC in a \n"
+    "        simulation study. The best scheme is run by default. See paper for details.\n"
+    "        -n 0: none\n"
+    "        -n 1: uniform\n"
+    "        -n 2: non-uniform (default)\n"
     "[(-v|--verbose) <verbose mode>]\n"
     "        -v 0: outputs no subproblem information (default)\n"
     "        -v 1: outputs CSV with subproblem information (e.g. subproblem ID, parent problem ID,\n"
@@ -66,15 +58,16 @@ const std::string help =
     "            subproblem,  etc.)\n"
     "        -v 2: additionally outputs subproblem trees in newick format\n"
     "        -v 3: additionally outputs subproblem quartet graphs in phylip matrix format\n"
-    "[(-n|--naive) <naive mode>]\n"
+    "[(-x|--execution) <execution mode>]\n"
     "        TREE-QMC uses an efficient algorithm that operates directly on the input gene trees by\n"
     "        default. The naive algorithm, which operates on a set of weighted quartets extracted\n"
     "        from the input gene trees, is also implemented for testing purposes.\n"
-    "        -n 0: run naive algorithm instead of efficient algorithm\n"
-    "        -n 1: write weighted quartets so that they given as input to wQMC (see\n"
-    "            \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\")\n"
-    "        -n 2: verify that the naive and efficient algorithms produce equivalent quartet\n"
-    "            graphs for all sub-problems\n"
+    "        -x 0: run efficient algorithm (default)\n"
+    "        -x 1: run naive algorithm\n"
+    "        -x 2: write weighted quartets so that they given as input to wQMC (see\n"
+    "              \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\")\n"
+    "        -x 3: verify that the naive and efficient algorithms produce equivalent quartet\n"
+    "              graphs for all sub-problems\n"
     "Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n"
     "If you use TREE-QMC in your work, please cite:\n"
     "Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species tree estimation from gene trees\", Github Repository, <link>.";
@@ -181,11 +174,14 @@ class Tree {
                 static double get_pairs(double *leaves, double s1, double s2, int x, int y);
         };
         Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1);
+        Tree(std::vector<Tree *> &input, str<void>::set &labels, int execution, int weighting, int seed);
         Tree(const std::string &newick);
         std::string to_string();
+        int size();
         ~Tree();
         double ***build_graph(Taxa &subset);
         void append_labels(Node *root, str<void>::set &labels);
+        void append_labels_to(str<void>::set &labels);
         void append_quartets(str<double>::map &quartets, Taxa &subset);
         static void append_quartet(str<double>::map &quartets, std::string quartet, double weight);
         static std::string join(std::string *labels);
@@ -545,22 +541,10 @@ void Tree::output_quartets(str<double>::map &quartets, Taxa &subset) {
     logs[4].close();
 }
 
-Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
-    std::string newick;
-    std::vector<Tree *> input;
-    str<void>::set labels;
-    if (s0 < 0) srand(time(0)); else srand(s0);
-    while (std::getline(fin, newick)) {
-        if (newick.find(";") == std::string::npos) break;
-        Tree *t = new Tree(newick);
-        logs[0] << t->to_string() << ";" << std::endl;
-        input.push_back(t);
-        t->append_labels(t->root, labels);
-    }
-    logs[0].close();
+Tree::Tree(std::vector<Tree *> &input, str<void>::set &labels, int execution, int weighting, int seed) {
     tid = 0;
     Taxa subset = Taxa(labels, weighting);
-    if (s1 < 0) srand(time(0)); else srand(s1);
+    if (seed < 0) srand(time(0)); else srand(seed);
     if (execution == 0) {
         root = construct_stree(input, subset, -1, 0);
     }
@@ -576,7 +560,6 @@ Tree::Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1) {
         output_quartets(quartets, subset);
         root = construct_stree_check(quartets, input, subset, -1, 0);
     }
-    for (Tree *t : input) delete t;
 }
 
 Tree::Tree(const std::string &newick) {
@@ -585,6 +568,10 @@ Tree::Tree(const std::string &newick) {
 
 std::string Tree::to_string() {
     return display_tree(root);
+}
+
+int Tree::size() {
+    return label2node.size();
 }
 
 Tree::~Tree() {
@@ -600,6 +587,10 @@ void Tree::append_labels(Node *root, str<void>::set &labels) {
         append_labels(root->left, labels);
         append_labels(root->right, labels);
     }
+}
+
+void Tree::append_labels_to(str<void>::set &labels) {
+    append_labels(root, labels);
 }
 
 double ***Tree::build_graph(Taxa &subset) {
@@ -1146,7 +1137,10 @@ std::string Graph::display_graph() {
     std::stringstream ss;
     ss << size << std::endl;
     for (int k = 0; k < 2; k ++) {
-        ss << std::setw(12) << " ";
+        if (k == 0)
+            ss << std::setw(12) << "GOOD";
+        else 
+            ss << std::setw(12) << "BAD";
         for (int i = 0; i < size; i ++) 
             ss << std::setw(12) << labels[i];
         ss << std::endl;
@@ -1278,29 +1272,100 @@ int main(int argc, char** argv) {
         if (opt == "-h" || opt == "--help") { std::cout << help; return 0; }
         if (opt == "-i" || opt == "--input" && i < argc - 1) input_file = argv[++ i];
         if (opt == "-o" || opt == "--output" && i < argc - 1) output_file = argv[++ i];
-        if ((opt == "-v" || opt == "--verbose") && i < argc - 1) verbose = std::stoi(argv[++ i]);
-        if ((opt == "-n" || opt == "--naive") && i < argc - 1) execution = std::stoi(argv[++ i]);
-        if ((opt == "-w" || opt == "--weighting") && i < argc - 1) weighting = std::stoi(argv[++ i]);
-        if (opt == "--polyseed" && i < argc - 1) polyseed = std::stoi(argv[++ i]);
-        if (opt == "--maxcutseed" && i < argc - 1) cutseed = std::stoi(argv[++ i]);
+        if (opt == "-v" || opt == "--verbose") {
+            std::string param = "";
+            if (i < argc - 1) param = argv[++ i];
+            if (param != "0" && param != "1" && param != "2") {
+                std::cout << "ERROR: invalid verbose parameter!" << std::endl;
+                std::cout << help;
+                return 0;
+            }
+            verbose = std::stoi(param);
+        }
+        if (opt == "-x" || opt == "--execution") {
+            std::string param = "";
+            if (i < argc - 1) param = argv[++ i];
+            if (param != "0" && param != "1" && param != "2") {
+                std::cout << "ERROR: invalid execution parameter!" << std::endl;
+                std::cout << help;
+                return 0;
+            }
+            execution = std::stoi(param);
+        }
+        if (opt == "-n" || opt == "--normalize") {
+            std::string param = "";
+            if (i < argc - 1) param = argv[++ i];
+            if (param != "0" && param != "1" && param != "2") {
+                std::cout << "ERROR: invalid normalize parameter!" << std::endl;
+                std::cout << help;
+                return 0;
+            }
+            weighting = std::stoi(param);
+        }
+        if (opt == "--polyseed") {
+            std::string param = "";
+            if (i < argc - 1) param = argv[++ i];
+            for (int j = 0; j < param.length(); j ++) {
+                if (param[j] < '0' || param[j] > '9') {
+                    std::cout << "ERROR: invalid polyseed parameter!" << std::endl;
+                    std::cout << help;
+                    return 0;
+                }
+            }
+            polyseed = std::stoi(param);
+        }
+        if (opt == "--maxcutseed" && i < argc - 1) {
+            std::string param = "";
+            if (i < argc - 1) param = argv[++ i];
+            for (int j = 0; j < param.length(); j ++) {
+                if (param[j] < '0' || param[j] > '9') {
+                    std::cout << "ERROR: invalid maxcutseed parameter!" << std::endl;
+                    std::cout << help;
+                    return 0;
+                }
+            }
+            cutseed = std::stoi(param);
+        }
     }
     std::ifstream fin(input_file);
     if (! fin.is_open()) {
-        std::cout << "input file error" << std::endl;
+        std::cout << "ERROR: input file " << input_file << " does not exist!" << std::endl;
+        std::cout << help;
         return 0;
     }
+    std::string newick;
+    std::vector<Tree *> input;
+    str<void>::set labels;
+    if (polyseed < 0) srand(time(0)); else srand(polyseed);
     logs[0].open(input_file + ".refined");
+    while (std::getline(fin, newick)) {
+        if (newick.find(";") == std::string::npos) break;
+        Tree *t = new Tree(newick);
+        logs[0] << t->to_string() << ";" << std::endl;
+        input.push_back(t);
+        t->append_labels_to(labels);
+    }
+    for (Tree *t : input) {
+        if (t->size() != labels.size()) {
+            std::cout << "ERROR: Incomplete gene trees!"
+                "The current version of TREE-QMC requires complete gene trees (i.e. no missing taxa)."
+                "Support for incomplete gene trees will be added in the near future." << std::endl;
+            for (Tree *t : input) delete t;
+            return 0;
+        }
+    }
+    fin.close();
     if (verbose >= 1) {
         logs[1].open(input_file + ".csv");
         logs[1] << "id,pid,depth,a,b" << std::endl;
     }
     auto start = std::chrono::high_resolution_clock::now();
-    Tree *t = new Tree(fin, execution, weighting, polyseed, cutseed);
-    fin.close();
+    Tree *t = new Tree(input, labels, execution, weighting, cutseed);
     std::string result = t->to_string() + ";";
     delete t;
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    for (Tree *t : input) delete t;
     std::ofstream fout(output_file);
     if (! fout.is_open()) {
         std::cout << result << std::endl;
