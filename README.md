@@ -1,1 +1,2 @@
-# Embedded-Quartet-Max-Cut
+# TREE-QMC
+
