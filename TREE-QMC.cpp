@@ -1305,11 +1305,13 @@ int main(int argc, char** argv) {
         if (opt == "--polyseed") {
             std::string param = "";
             if (i < argc - 1) param = argv[++ i];
-            for (int j = 0; j < param.length(); j ++) {
-                if (param[j] < '0' || param[j] > '9') {
-                    std::cout << "ERROR: invalid polyseed parameter!" << std::endl;
-                    std::cout << help;
-                    return 0;
+            if (param != "-1") {
+                for (int j = 0; j < param.length(); j ++) {
+                    if (param[j] < '0' || param[j] > '9') {
+                        std::cout << "ERROR: invalid polyseed parameter!" << std::endl;
+                        std::cout << help;
+                        return 0;
+                    }
                 }
             }
             polyseed = std::stoi(param);
@@ -1317,11 +1319,13 @@ int main(int argc, char** argv) {
         if (opt == "--maxcutseed" && i < argc - 1) {
             std::string param = "";
             if (i < argc - 1) param = argv[++ i];
-            for (int j = 0; j < param.length(); j ++) {
-                if (param[j] < '0' || param[j] > '9') {
-                    std::cout << "ERROR: invalid maxcutseed parameter!" << std::endl;
-                    std::cout << help;
-                    return 0;
+            if (param != "-1") {
+                for (int j = 0; j < param.length(); j ++) {
+                    if (param[j] < '0' || param[j] > '9') {
+                        std::cout << "ERROR: invalid maxcutseed parameter!" << std::endl;
+                        std::cout << help;
+                        return 0;
+                    }
                 }
             }
             cutseed = std::stoi(param);
