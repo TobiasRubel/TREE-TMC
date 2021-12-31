@@ -1266,6 +1266,11 @@ double Graph::sdp_cut(double alpha, str<void>::set *A, str<void>::set *B) {
 }
 
 int main(int argc, char** argv) {
+    std::cout << "TREE-QMC version 1.0.0\nCOMMAND: ";
+    for (int i = 0; i < argc; i++) {
+        std::cout << argv[i] << ' ';
+    }
+    std::cout << std::endl << std::endl;
     int execution = 0, weighting = 0, polyseed = 1, cutseed = 1;
     for (int i = 0; i < argc; i ++) {
         std::string opt(argv[i]);
