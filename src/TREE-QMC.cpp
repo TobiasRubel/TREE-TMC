@@ -18,59 +18,68 @@ int verbose = 0, tid = 0;
 std::ofstream logs[8];
 
 const std::string help = 
-    "================== TREE-QMC =====================\n"
-    "This is version 1.0.0 of TREe Embedded Quartet Max Cut (TREE-QMC).\n" 
-    "Usage: ./TREE-QMC [-h|--help] (-i|--input) <input file> [(-o|--output) <output file>]\n"
-    "[(--polyseed) <seed value>] [(--maxcutseed) <seed value>]\n"
-    "[(-n|--normalize) <normalization scheme>] [(-v|--verbose) <verbose mode>]\n"
-    "[(-x|--execution) <execution mode>]\n"
-    "[-h|--help]\n"
-    "        Prints this help message.\n"
-    "(-i|--input) <input file>\n"
-    "        Name of file containing input gene trees in newick format (required)\n"
-    "        IMPORTANT: the current implementation of TREE-QMC requires that the input gene\n"
-    "        trees are unrooted and binary. Thus, roots are suppressed and polytomies are randomly\n"
-    "        Refined during a preprocessing phase. The resulting trees are written to\n"
-    "        \"<input file>.refined\" for reference.\n"
-    "[(-o|--output) <output file>]\n"
-    "        Name of file for writing the output species tree (default: write to stdout)\n"
-    "[(--polyseed) <seed value>]\n"
-    "        Seeds the random number generator with <seed value> prior to arbitrarily resolving\n"
-    "        polytomies during the preprocessing phase. If <seed value> is set to -1, system time\n" 
-    "        is used; otherwise, <seed value> should be a positive integer (default: 12345).\n"
-    "[(--maxcutseed) <seed value>]\n"
-    "        Seeds the random number generator with <seed value> prior to calling the max cut\n"
-    "        heuristic but after the preprocessing phase. If <seed value> is set to -1, system time\n" 
-    "        is used; otherwise, <seed value> should be a positive integer (default: 678910).\n"
-    "[(-n|--normalize) <normalization scheme for artificial taxa>]\n"
-    "        Initially, each quartet (e.g. \"A,B|C,D\") is weighted by the number of input gene trees\n"
-    "        that induce it. At each step in the divide phase of the wQMC and TREE-QMC algorithms, \n"
-    "        the input is modified with an artificial taxon. We propose two normalization schemes \n"
-    "        for artificial taxa and find that they improve empirical performance of TREE-QMC in a \n"
-    "        simulation study. The best scheme is run by default. See paper for details.\n"
-    "        -n 0: none\n"
-    "        -n 1: uniform\n"
-    "        -n 2: non-uniform (default)\n"
-    "[(-v|--verbose) <verbose mode>]\n"
-    "        -v 0: outputs no subproblem information (default)\n"
-    "        -v 1: outputs CSV with subproblem information (e.g. subproblem ID, parent problem ID,\n"
-    "            depth of recursion, # of taxa in subproblem, # of artificial taxa in the \n"
-    "            subproblem,  etc.)\n"
-    "        -v 2: additionally outputs subproblem trees in newick format\n"
-    "        -v 3: additionally outputs subproblem quartet graphs in phylip matrix format\n"
-    "[(-x|--execution) <execution mode>]\n"
-    "        TREE-QMC uses an efficient algorithm that operates directly on the input gene trees by\n"
-    "        default. The naive algorithm, which operates on a set of weighted quartets extracted\n"
-    "        from the input gene trees, is also implemented for testing purposes.\n"
-    "        -x 0: run efficient algorithm (default)\n"
-    "        -x 1: run naive algorithm\n"
-    "        -x 2: write weighted quartets so that they given as input to wQMC (see\n"
-    "              \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\")\n"
-    "        -x 3: verify that the naive and efficient algorithms produce equivalent quartet\n"
-    "              graphs for all sub-problems\n"
-    "Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n"
-    "If you use TREE-QMC in your work, please cite:\n"
-    "Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species tree estimation from gene trees\", Github Repository, <link>.";
+"=================================== TREE-QMC ===================================\n"
+"This is version 1.0.0 of TREe Embedded Quartet Max Cut (TREE-QMC).\n\n" 
+"USAGE:\n"
+"./TREE-QMC (-i|--input) <input file> [(-o|--output) <output file>]\n"
+"           [(--polyseed) <integer>] [(--maxcutseed) <integer>]\n"
+"           [(-n|--normalize) <normalization scheme>]\n"
+"           [(-x|--execution) <execution mode>]\n"
+"           [(-v|--verbose) <verbose mode>] [-h|--help]\n\n"
+"OPTIONS:\n"
+"[-h|--help]\n"
+"        Prints this help message.\n"
+"(-i|--input) <input file>\n"
+"        Name of file containing gene trees in newick format (required)\n"
+"        IMPORTANT: current implementation of TREE-QMC requires that the input\n"
+"        gene trees are unrooted and binary. Thus, TREE-QMC suppresses roots\n" 
+"        and randomly refines polytomies during a preprocessing phase; the\n"
+"        resulting trees are written to \"<input file>.refined\".\n"
+"[(-o|--output) <output file>]\n"
+"        Name of file for writing output species tree (default: stdout)\n"
+"[(--polyseed) <integer>]\n"
+"        Seeds random number generator with <integer> prior to arbitrarily\n"
+"        resolving polytomies. If <integer> is set to -1, system time is used;\n" 
+"        otherwise, <integer> should be positive (default: 12345).\n"
+"[(--maxcutseed) <integer>]\n"
+"        Seeds random number generator with <integer> prior to calling the max\n"
+"        cut heuristic but after the preprocessing phase. If <integer> is set to\n"
+"        -1, system time is used; otherwise, <integer> should be positive\n"
+"        (default: 678910).\n"
+"[(-n|--normalize) <normalization scheme>]\n"
+"        Initially, each quartet is weighted by the number of input gene\n"
+"        trees that induce it. At each step in the divide phase of wQMC and\n"
+"        TREE-QMC, the input quartets are modified with artificial taxa. We\n"
+"        introduce two normalization schemes for artificial taxa and find\n"
+"        that they improve empirical performance of TREE-QMC in a simulation\n"
+"        study. The best scheme is run by default. See paper for details.\n"
+"        -n 0: none\n"
+"        -n 1: uniform\n"
+"        -n 2: non-uniform (default)\n"
+"[(-x|--execution) <execution mode>]\n"
+"        TREE-QMC uses an efficient algorithm that operates directly on the\n"
+"        input gene trees by default. The naive algorithm, which operates on a\n"
+"        set of quartets weighted based on the input gene trees, is also\n"
+"        implemented for testing purposes.\n"
+"        -x 0: run efficient algorithm (default)\n"
+"        -x 1: run naive algorithm\n"
+"        -x 2: write weighted quartets so that they given as input to wQMC; see\n"
+"              \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\"\n"                  
+"        -x 3: verify that the naive and efficient algorithms produce equivalent\n"
+"              quartet graphs for all subproblems\n"
+"[(-v|--verbose) <verbose mode>]\n"
+"        -v 0: outputs no subproblem information (default)\n"
+"        -v 1: outputs CSV with subproblem information (subproblem ID, parent\n"
+"              problem ID, depth of recursion, number of taxa in subproblem,\n"
+"              number of artificial taxa in the subproblem)\n"
+"        -v 2: also outputs subproblem trees in newick format\n"
+"        -v 3: also outputs subproblem quartet graphs in phylip matrix format\n\n"
+"Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n\n"
+"If you use TREE-QMC in your work, please cite:\n"
+"  Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species\n"
+"  tree estimation from gene trees\", https://github.com/yhhan19/TREE-QMC.\n"
+"================================================================================\n\n";
+
 
 /*
     succinct names for unordered map and set of strings
@@ -603,6 +612,7 @@ double ***Tree::build_graph(Taxa &subset) {
             if (i != j) multiple_pairs(root, i, j);
     double ***mat = Matrix::new_mat<double>(subset.size());
     build_mat(root, subset, mat);
+    
     if (subset.get_weighting() == 2) {
         double *c = new double[m + 1];
         for (int i = 0; i <= m; i ++) 
@@ -634,8 +644,7 @@ double ***Tree::build_graph(Taxa &subset) {
             }
         }
         delete [] c;
-    }
-    else {
+    } else {
         double *c = new double[m + 1];
         for (int i = 0; i <= m; i ++) 
             c[i] = i == 0 ? root->leaves[i] - 2 : root->leaves[i];
@@ -648,6 +657,7 @@ double ***Tree::build_graph(Taxa &subset) {
             }
         }
     }
+
     clear_states(root);
     return mat;
 }
@@ -1138,9 +1148,9 @@ std::string Graph::display_graph() {
     ss << size << std::endl;
     for (int k = 0; k < 2; k ++) {
         if (k == 0)
-            ss << std::setw(12) << "GOOD";
+            ss << std::setw(12) << "GOOD EDGES:";
         else 
-            ss << std::setw(12) << "BAD";
+            ss << std::setw(12) << "BAD EDGES:";
         for (int i = 0; i < size; i ++) 
             ss << std::setw(12) << labels[i];
         ss << std::endl;
@@ -1280,7 +1290,7 @@ int main(int argc, char** argv) {
         if (opt == "-v" || opt == "--verbose") {
             std::string param = "";
             if (i < argc - 1) param = argv[++ i];
-            if (param != "0" && param != "1" && param != "2") {
+            if (param != "0" && param != "1" && param != "2" && param != "3") {
                 std::cout << "ERROR: invalid verbose parameter!" << std::endl;
                 std::cout << help;
                 return 0;
@@ -1290,7 +1300,7 @@ int main(int argc, char** argv) {
         if (opt == "-x" || opt == "--execution") {
             std::string param = "";
             if (i < argc - 1) param = argv[++ i];
-            if (param != "0" && param != "1" && param != "2") {
+            if (param != "0" && param != "1" && param != "2" && param != "3") {
                 std::cout << "ERROR: invalid execution parameter!" << std::endl;
                 std::cout << help;
                 return 0;
@@ -1356,9 +1366,10 @@ int main(int argc, char** argv) {
     }
     for (Tree *t : input) {
         if (t->size() != labels.size()) {
-            std::cout << "ERROR: Incomplete gene trees!"
-                "The current version of TREE-QMC requires complete gene trees (i.e. no missing taxa)."
-                "Support for incomplete gene trees will be added in the near future." << std::endl;
+            std::cout << 
+"ERROR: Incomplete gene trees!\n"
+"The current version of TREE-QMC requires complete gene trees (i.e., no missing\n"
+"taxa). Support for incomplete gene trees will be added in the near future.\n\n";
             for (Tree *t : input) delete t;
             return 0;
         }
@@ -1368,6 +1379,7 @@ int main(int argc, char** argv) {
         logs[1].open(input_file + ".csv");
         logs[1] << "id,pid,depth,a,b" << std::endl;
     }
+
     auto start = std::chrono::high_resolution_clock::now();
     Tree *t = new Tree(input, labels, execution, weighting, cutseed);
     std::string result = t->to_string() + ";";
@@ -1385,6 +1397,6 @@ int main(int argc, char** argv) {
     }
     logs[0].close();
     if (verbose >= 1) logs[1].close();
-    std::cout << "execution time: " << duration.count() << "ms" << std::endl;
+    std::cout << "Execution time: " << duration.count() << "ms" << std::endl;
     return 0;
 }
