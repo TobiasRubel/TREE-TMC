@@ -23,8 +23,9 @@ To see TREE-QMC usage options, use command:
 The output should be
 ```
 TREE-QMC version 1.0.0
-COMMAND: ./TREE-QMC -h 
+COMMAND: ./TREE-QMC 
 
+ERROR: input file  does not exist!
 =================================== TREE-QMC ===================================
 This is version 1.0.0 of TREe Embedded Quartet Max Cut (TREE-QMC).
 
@@ -54,7 +55,7 @@ OPTIONS:
         Seeds random number generator with <integer> prior to calling the max
         cut heuristic but after the preprocessing phase. If <integer> is set to
         -1, system time is used; otherwise, <integer> should be positive
-        (default: 678910).
+        (default: 1).
 [(-n|--normalize) <normalization scheme>]
         Initially, each quartet is weighted by the number of input gene
         trees that induce it. At each step in the divide phase of wQMC and
@@ -72,17 +73,17 @@ OPTIONS:
         implemented for testing purposes.
         -x 0: run efficient algorithm (default)
         -x 1: run naive algorithm
-        -x 2: write weighted quartets so that they given as input to wQMC; see
+        -x 2: also write weighted quartets so they given as input to wQMC; see
               "<input file>.weighted_quartets" and "<input file>.taxon_name_map"
         -x 3: verify that the naive and efficient algorithms produce equivalent
               quartet graphs for all subproblems
 [(-v|--verbose) <verbose mode>]
-        -v 0: outputs no subproblem information (default)
-        -v 1: outputs CSV with subproblem information (subproblem ID, parent
+        -v 0: write no subproblem information (default)
+        -v 1: write CSV with subproblem information (subproblem ID, parent
               problem ID, depth of recursion, number of taxa in subproblem,
               number of artificial taxa in the subproblem)
-        -v 2: also outputs subproblem trees in newick format
-        -v 3: also outputs subproblem quartet graphs in phylip matrix format
+        -v 2: also write subproblem trees in newick format
+        -v 3: also write subproblem quartet graphs in phylip matrix format
 
 Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)
 
