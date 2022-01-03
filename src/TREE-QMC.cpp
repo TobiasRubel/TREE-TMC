@@ -45,7 +45,7 @@ const std::string help =
 "        Seeds random number generator with <integer> prior to calling the max\n"
 "        cut heuristic but after the preprocessing phase. If <integer> is set to\n"
 "        -1, system time is used; otherwise, <integer> should be positive\n"
-"        (default: 678910).\n"
+"        (default: 1).\n"
 "[(-n|--normalize) <normalization scheme>]\n"
 "        Initially, each quartet is weighted by the number of input gene\n"
 "        trees that induce it. At each step in the divide phase of wQMC and\n"
@@ -63,17 +63,17 @@ const std::string help =
 "        implemented for testing purposes.\n"
 "        -x 0: run efficient algorithm (default)\n"
 "        -x 1: run naive algorithm\n"
-"        -x 2: write weighted quartets so that they given as input to wQMC; see\n"
+"        -x 2: also write weighted quartets so they given as input to wQMC; see\n"
 "              \"<input file>.weighted_quartets\" and \"<input file>.taxon_name_map\"\n"                  
 "        -x 3: verify that the naive and efficient algorithms produce equivalent\n"
 "              quartet graphs for all subproblems\n"
 "[(-v|--verbose) <verbose mode>]\n"
-"        -v 0: outputs no subproblem information (default)\n"
-"        -v 1: outputs CSV with subproblem information (subproblem ID, parent\n"
+"        -v 0: write no subproblem information (default)\n"
+"        -v 1: write CSV with subproblem information (subproblem ID, parent\n"
 "              problem ID, depth of recursion, number of taxa in subproblem,\n"
 "              number of artificial taxa in the subproblem)\n"
-"        -v 2: also outputs subproblem trees in newick format\n"
-"        -v 3: also outputs subproblem quartet graphs in phylip matrix format\n\n"
+"        -v 2: also write subproblem trees in newick format\n"
+"        -v 3: also write subproblem quartet graphs in phylip matrix format\n\n"
 "Contact: Yunheng Han (yhhan@umd.edu) or Erin Molloy (ekmolloy@umd.edu)\n\n"
 "If you use TREE-QMC in your work, please cite:\n"
 "  Han and Molloy, 2021, \"TREE-QMC: Scalable and accurate quartet-based species\n"
@@ -188,6 +188,7 @@ class Tree {
         std::string to_string();
         int size();
         ~Tree();
+        int get_total_polytomies();
         double ***build_graph(Taxa &subset);
         void append_labels(Node *root, str<void>::set &labels);
         void append_labels_to(str<void>::set &labels);
@@ -198,6 +199,7 @@ class Tree {
     private: 
         str<Node *>::map label2node;
         Node *root;
+        int total_polytomies;
         void clear_states(Node *root);
         void build_states(Node *root, Taxa &subset);
         void build_depth(Node *root, int depth);
@@ -444,15 +446,18 @@ std::string Taxa::get_label(std::string label) {
 
 double Taxa::get_weight(std::string label) {
     if (weighting == 0) {
-        Node *node = label2node[label];
-        return get_weight(node);
+        // No normalization - all taxa have weight 1
+        return 1.0;
     }
     else if (weighting == 1) {
+        // Uniform normalization
         Node *root = get_root(label);
         return 1.0 / root->size;
     }
     else {
-        return 1.0;
+        // Non-uniform normalization (weighting == 2)
+        Node *node = label2node[label];
+        return get_weight(node);
     }
 }
 
@@ -555,18 +560,26 @@ Tree::Tree(std::vector<Tree *> &input, str<void>::set &labels, int execution, in
     Taxa subset = Taxa(labels, weighting);
     if (seed < 0) srand(time(0)); else srand(seed);
     if (execution == 0) {
+        // Run efficient algorithm
         root = construct_stree(input, subset, -1, 0);
     }
     else if (execution == 1) {
+        // Run naive algorithm
+        str<double>::map quartets;
+        for (Tree *t : input) t->append_quartets(quartets, subset);
+        root = construct_stree_brute(quartets, subset, -1, 0);
+    }
+    else if (execution == 2) {
+        // Run naive algorithm and write quartets
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
         output_quartets(quartets, subset);
         root = construct_stree_brute(quartets, subset, -1, 0);
     }
     else {
+        // Check efficient and naive algorithms produce same quartet graphs (execution == 3)
         str<double>::map quartets;
         for (Tree *t : input) t->append_quartets(quartets, subset);
-        output_quartets(quartets, subset);
         root = construct_stree_check(quartets, input, subset, -1, 0);
     }
 }
@@ -585,6 +598,10 @@ int Tree::size() {
 
 Tree::~Tree() {
     delete root;
+}
+
+int Tree::get_total_polytomies() {
+    return total_polytomies;
 }
 
 void Tree::append_labels(Node *root, str<void>::set &labels) {
@@ -696,6 +713,9 @@ Tree::Node *Tree::build_tree(const std::string &newick) {
                 k = i + 1;
             }
         }
+
+        if (subtrees.size() > 1) total_polytomies += 1;
+
         int i = newick.length() - 1;
         while (newick.at(i) != ')') i --;
         subtrees.push_back(build_tree(newick.substr(k, i - k)));
@@ -709,6 +729,7 @@ Tree::Node *Tree::build_tree(const std::string &newick) {
             subtrees.erase(subtrees.begin() + (j > i ? j - 1 : j));
             subtrees.push_back(root);
         }
+
         return subtrees[0];
     }
 }
@@ -1276,12 +1297,19 @@ double Graph::sdp_cut(double alpha, str<void>::set *A, str<void>::set *B) {
 }
 
 int main(int argc, char** argv) {
+    auto start = std::chrono::high_resolution_clock::now();
+
     std::cout << "TREE-QMC version 1.0.0\nCOMMAND: ";
     for (int i = 0; i < argc; i++) {
         std::cout << argv[i] << ' ';
     }
     std::cout << std::endl << std::endl;
-    int execution = 0, weighting = 0, polyseed = 1, cutseed = 1;
+
+    int polyseed = 12345;
+    int cutseed = 1;
+    int weighting = 2;  // taxon weighting = normalization scheme
+    int execution = 0;
+
     for (int i = 0; i < argc; i ++) {
         std::string opt(argv[i]);
         if (opt == "-h" || opt == "--help") { std::cout << help; return 0; }
@@ -1315,7 +1343,7 @@ int main(int argc, char** argv) {
                 std::cout << help;
                 return 0;
             }
-            weighting = std::stoi(param);
+            weighting = std::stoi(param);  // taxon weighting = normalization scheme
         }
         if (opt == "--polyseed") {
             std::string param = "";
@@ -1352,18 +1380,35 @@ int main(int argc, char** argv) {
         std::cout << help;
         return 0;
     }
+
     std::string newick;
     std::vector<Tree *> input;
     str<void>::set labels;
+
     if (polyseed < 0) srand(time(0)); else srand(polyseed);
-    logs[0].open(input_file + ".refined");
+
+    // Read input gene trees
+    int total_polytomies = 0;
     while (std::getline(fin, newick)) {
         if (newick.find(";") == std::string::npos) break;
         Tree *t = new Tree(newick);
-        logs[0] << t->to_string() << ";" << std::endl;
+        total_polytomies += t->get_total_polytomies();
         input.push_back(t);
         t->append_labels_to(labels);
     }
+    fin.close();
+
+    // Write input gene trees if refined one or more polytomies
+    std::cout << "Refined " << total_polytomies << " polytomies\n";
+    if (total_polytomies) {
+        logs[0].open(input_file + ".refined");
+        for (Tree *t : input) {
+            logs[0] << t->to_string() << ";" << std::endl;
+        }
+        logs[0].close();
+    }
+
+    // Check for incomplete trees
     for (Tree *t : input) {
         if (t->size() != labels.size()) {
             std::cout << 
@@ -1374,19 +1419,20 @@ int main(int argc, char** argv) {
             return 0;
         }
     }
-    fin.close();
-    if (verbose >= 1) {
+
+    // Open CSV log file
+    if (verbose > 0) {
         logs[1].open(input_file + ".csv");
         logs[1] << "id,pid,depth,a,b" << std::endl;
     }
 
-    auto start = std::chrono::high_resolution_clock::now();
+    // Run TREE-QMC algorithm
     Tree *t = new Tree(input, labels, execution, weighting, cutseed);
     std::string result = t->to_string() + ";";
     delete t;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     for (Tree *t : input) delete t;
+
+    // Write species tree
     std::ofstream fout(output_file);
     if (! fout.is_open()) {
         std::cout << result << std::endl;
@@ -1395,8 +1441,14 @@ int main(int argc, char** argv) {
         fout << result << std::endl;
         fout.close();
     }
-    logs[0].close();
-    if (verbose >= 1) logs[1].close();
+
+    // Close CSV log files
+    if (verbose > 0) logs[1].close();  // .csv
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     std::cout << "Execution time: " << duration.count() << "ms" << std::endl;
+
     return 0;
 }
