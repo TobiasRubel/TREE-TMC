@@ -588,10 +588,9 @@ Tree::Tree(std::vector<Tree *> &input, str<void>::set &labels, int execution, in
 
 Tree::Tree(const std::string &newick) {
     root = build_tree(newick);
-
-    if (root->left->fake || root->right->fake) {
-        total_polytomies--;
-        root->left->fake = true;
+    if (total_polytomies > 0) {
+        if (root->left->fake || root->right->fake)
+            total_polytomies--;
     }
 }
 
@@ -726,11 +725,6 @@ Tree::Node *Tree::build_tree(const std::string &newick) {
         subtrees.push_back(build_tree(newick.substr(k, i - k)));
 
         if (subtrees.size() > 2) total_polytomies += 1;
-
-        std::cout << "Joining \n";
-        for (int i = 0; i < subtrees.size(); i++) {
-            std::cout << "  " << display_tree(subtrees[i]) << "\n";
-        }
 
         while (subtrees.size() > 2) {
             int i = rand() % subtrees.size(), j = i; 
