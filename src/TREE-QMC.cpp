@@ -180,6 +180,7 @@ class Tree {
                 int size;
                 double *leaves, **pairs, s1, s2;
                 std::string label;
+                bool fake; // indicates edge above should be contracted
                 static double get_pairs(double *leaves, double s1, double s2, int x, int y);
         };
         Tree(std::ifstream &fin, int execution, int weighting, int s0, int s1);
@@ -491,6 +492,7 @@ Tree::Node::Node(const std::string &name) {
     pairs = NULL;
     s1 = s2 = 0;
     label = name;
+    fake = false;
 }
 
 void Tree::Node::new_states(int size) {
@@ -586,6 +588,11 @@ Tree::Tree(std::vector<Tree *> &input, str<void>::set &labels, int execution, in
 
 Tree::Tree(const std::string &newick) {
     root = build_tree(newick);
+
+    if (root->left->fake || root->right->fake) {
+        total_polytomies--;
+        root->left->fake = true;
+    }
 }
 
 std::string Tree::to_string() {
@@ -714,23 +721,38 @@ Tree::Node *Tree::build_tree(const std::string &newick) {
             }
         }
 
-        if (subtrees.size() > 1) total_polytomies += 1;
-
         int i = newick.length() - 1;
         while (newick.at(i) != ')') i --;
         subtrees.push_back(build_tree(newick.substr(k, i - k)));
-        while (subtrees.size() > 1) {
+
+        if (subtrees.size() > 2) total_polytomies += 1;
+
+        std::cout << "Joining \n";
+        for (int i = 0; i < subtrees.size(); i++) {
+            std::cout << "  " << display_tree(subtrees[i]) << "\n";
+        }
+
+        while (subtrees.size() > 2) {
             int i = rand() % subtrees.size(), j = i; 
             while (j == i) j = rand() % subtrees.size();
+
             Node *root = new Node(Node::pseudonym());
-            root->left = subtrees[i]; root->right = subtrees[j];
+            root->left = subtrees[i];
+            root->right = subtrees[j];
+            root->fake = true;
             root->left->parent = root->right->parent = root;
+
             subtrees.erase(subtrees.begin() + i);
             subtrees.erase(subtrees.begin() + (j > i ? j - 1 : j));
             subtrees.push_back(root);
         }
 
-        return subtrees[0];
+        Node *root = new Node(Node::pseudonym());
+        root->left = subtrees[0]; 
+        root->right = subtrees[1];
+        root->left->parent = root->right->parent = root;
+
+        return root;
     }
 }
 
