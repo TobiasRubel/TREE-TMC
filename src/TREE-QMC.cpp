@@ -189,7 +189,7 @@ class Tree {
         std::string to_string();
         int size();
         ~Tree();
-        int get_total_polytomies();
+        int get_total_fake();
         double ***build_graph(Taxa &subset);
         void append_labels(Node *root, str<void>::set &labels);
         void append_labels_to(str<void>::set &labels);
@@ -200,7 +200,7 @@ class Tree {
     private: 
         str<Node *>::map label2node;
         Node *root;
-        int total_polytomies;
+        int total_fake;
         void clear_states(Node *root);
         void build_states(Node *root, Taxa &subset);
         void build_depth(Node *root, int depth);
@@ -587,10 +587,11 @@ Tree::Tree(std::vector<Tree *> &input, str<void>::set &labels, int execution, in
 }
 
 Tree::Tree(const std::string &newick) {
+    total_fake = 0;
     root = build_tree(newick);
-    if (total_polytomies > 0) {
+    if (total_fake > 0) {
         if (root->left->fake || root->right->fake)
-            total_polytomies--;
+            total_fake--;
     }
 }
 
@@ -606,8 +607,8 @@ Tree::~Tree() {
     delete root;
 }
 
-int Tree::get_total_polytomies() {
-    return total_polytomies;
+int Tree::get_total_fake() {
+    return total_fake;
 }
 
 void Tree::append_labels(Node *root, str<void>::set &labels) {
@@ -724,7 +725,7 @@ Tree::Node *Tree::build_tree(const std::string &newick) {
         while (newick.at(i) != ')') i --;
         subtrees.push_back(build_tree(newick.substr(k, i - k)));
 
-        if (subtrees.size() > 2) total_polytomies += 1;
+        total_fake += subtrees.size() - 2;
 
         while (subtrees.size() > 2) {
             int i = rand() % subtrees.size(), j = i; 
@@ -1404,19 +1405,19 @@ int main(int argc, char** argv) {
     if (polyseed < 0) srand(time(0)); else srand(polyseed);
 
     // Read input gene trees
-    int total_polytomies = 0;
+    int total_fake = 0;
     while (std::getline(fin, newick)) {
         if (newick.find(";") == std::string::npos) break;
         Tree *t = new Tree(newick);
-        total_polytomies += t->get_total_polytomies();
+        total_fake += t->get_total_fake();
         input.push_back(t);
         t->append_labels_to(labels);
     }
     fin.close();
 
     // Write input gene trees if refined one or more polytomies
-    std::cout << "Refined " << total_polytomies << " polytomies\n";
-    if (total_polytomies) {
+    std::cout << "Performed " << total_fake << " refinement operations on input\n";
+    if (total_fake) {
         logs[0].open(input_file + ".refined");
         for (Tree *t : input) {
             logs[0] << t->to_string() << ";" << std::endl;
