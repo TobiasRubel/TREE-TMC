@@ -637,7 +637,7 @@ double ***Tree::build_graph(Taxa &subset) {
     double ***mat = Matrix::new_mat<double>(subset.size());
     build_mat(root, subset, mat);
     
-    if (subset.get_weighting() == 2) {
+    if (subset.get_weighting() == 1) {
         double *c = new double[m + 1];
         for (int i = 0; i <= m; i ++) 
             c[i] = root->leaves[i];
